@@ -148,18 +148,18 @@ function transferBlock(a){
     `<tr><td class="nm" title="${esc(x.cust)}">${esc(x.cust)}</td><td class="r">${x.adv}</td><td class="r">${f1(x.costWan)}</td></tr>`).join('');
   return `
   <div class="sec span-6">
-    <div class="sec-t"><span class="bar" style="background:#d97706"></span>转户情况（千川）<span class="hint">近30天 09.09–10.08</span></div>
+    <div class="sec-t"><span class="bar" style="background:#d97706"></span>转户情况（千川）<span class="hint">转户窗口 近30天 09.09–10.08｜消耗为2026年度累计(01.01–10.08)</span></div>
     <div class="tf-grid">
       <div class="tf-mini" style="border:1px solid #f0d6a8;background:#fffdf7"><div class="l">外部转出</div><div class="v" style="color:#b45309">${m30.outExt.adv}</div></div>
       <div class="tf-mini" style="border:1px solid #bbf0d2;background:#f7fffb"><div class="l">外部转入</div><div class="v" style="color:#059669">${m30.inExt.adv}</div></div>
       <div class="tf-mini" style="border-style:solid;background:#fff"><div class="l">外部净增</div><div class="v" style="color:${netColor}">${net>0?'+':''}${net}</div></div>
-      <div class="tf-mini" style="border-style:solid;background:#fff"><div class="l">转出累计消耗</div><div class="v">${f1(m30.outExt.costWan)}<small> 万</small></div></div>
+      <div class="tf-mini" style="border-style:solid;background:#fff"><div class="l">转出客户年度累计消耗</div><div class="v">${f1(m30.outExt.costWan)}<small> 万</small></div></div>
     </div>
     <div class="tf-sub">
       <b>YTD 外部</b>：转出 ${ytd.outExt.adv} ｜ 转入 ${ytd.inExt.adv} ｜ 净 <b style="color:${ytdColor}">${ytd.netExtAdv>0?'+':''}${ytd.netExtAdv}</b><br/>
       <b>近30天内部（8家之间）</b>：转出 ${m30.outInt.adv} ｜ 转入 ${m30.inInt.adv}
     </div>
-    ${lost?`<table class="minitable"><thead><tr><th>近30天外部转出 Top</th><th class="r">广告主</th><th class="r">消耗(万)</th></tr></thead><tbody>${lost}</tbody></table>`:''}
+    ${lost?`<table class="minitable"><thead><tr><th>近30天转出客户</th><th class="r">广告主</th><th class="r">年度累计消耗(万)</th></tr></thead><tbody>${lost}</tbody></table>`:''}
   </div>`;
 }
 
@@ -234,7 +234,7 @@ function render(){
 
     <div class="foot">
       <b>数据来源</b>：渠道业绩看板（${DATA.dataDate} 快照）、D11跟踪表、《陈日晖代理Q4品星目标》、转户看板（report 15668836）、钱包份额数据集（dataset 4898252，闭环千川口径）。<br/>
-      <b>口径</b>：金额单位万元；参考期日耗与双十一目标取自 D11 跟踪表，膨胀率 = 最近一天 ÷ 参考期日耗 − 1。<b>转户</b>按（广告主+转出+转入+成功时间+类型）去重，外部＝与8家之外。<br/>
+      <b>口径</b>：金额单位万元；参考期日耗与双十一目标取自 D11 跟踪表，膨胀率 = 最近一天 ÷ 参考期日耗 − 1。<b>转户</b>按（广告主+转出+转入+成功时间+类型）去重，外部＝与8家之外；转户窗口为近30天，所列“消耗”为该广告主2026年度(01.01–10.08)累计消耗。<br/>
       <b>钱包份额</b>：严格筛选投放模式＝闭环千川；份额＝本代理千川 ÷ 客户跨代理千川总耗；流失＝7月有、10月在该代理无消耗。<b>T-1 客户榜</b>：客户级闭环千川消耗及环比。生成时间 2026-10-09。
     </div>
    </div>
