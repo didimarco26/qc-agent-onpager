@@ -38,6 +38,7 @@ function xcBeacon(payload){
   const cfg=DATA.usageCfg;
   if(!cfg||!cfg.url) return;
   try{
+    if(new URLSearchParams(location.search).get('nobeacon')==='1') return;
     const data=Object.assign({sessionId:xcSession(),key:xcKey(),ua:navigator.userAgent},payload);
     fetch(cfg.url,{method:'POST',mode:'cors',keepalive:true,
       headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{});
