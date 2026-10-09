@@ -35,9 +35,9 @@ button:hover{background:#1d4ed8}
 </div>
 <script>
 function enter(){
-  const k=document.getElementById('key').value.trim().replace(/[^a-f0-9]/gi,'');
+  const k=document.getElementById('key').value.trim().replace(/[^A-Za-z0-9_-]/g,'');
   if(!k){document.getElementById('err').textContent='请输入密钥';return;}
-  location.href='./'+k+'/';
+  location.href='./'+encodeURIComponent(k)+'/';
 }
 document.getElementById('go').onclick=enter;
 document.getElementById('key').addEventListener('keydown',e=>{if(e.key==='Enter')enter();});
