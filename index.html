@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>代理商一页纸 · 密钥入口</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#172554,#1e3a8a 55%,#2563eb)}
+.card{background:#fff;border-radius:20px;padding:40px 44px;width:420px;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+.logo{font-size:40px;text-align:center}
+h1{font-size:20px;text-align:center;margin:14px 0 6px;color:#0f172a}
+p{font-size:13px;text-align:center;color:#64748b;margin-bottom:24px}
+input{width:100%;padding:14px 16px;border:1.5px solid #e2e8f0;border-radius:11px;font-size:14px;
+  letter-spacing:.5px;outline:none;text-align:center}
+input:focus{border-color:#2563eb}
+button{width:100%;margin-top:14px;padding:14px;border:none;border-radius:11px;background:#2563eb;color:#fff;
+  font-size:15px;font-weight:700;cursor:pointer}
+button:hover{background:#1d4ed8}
+.err{color:#dc2626;font-size:12px;text-align:center;margin-top:12px;min-height:16px}
+.foot{margin-top:22px;font-size:11px;color:#94a3b8;text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🪭</div>
+  <h1>代理商每日一页纸</h1>
+  <p>请输入由渠道经理提供的访问密钥</p>
+  <input id="key" placeholder="输入密钥" autocomplete="off" autofocus/>
+  <button id="go">进入我的一页纸</button>
+  <div class="err" id="err"></div>
+  <div class="foot">Q4 双十一冲刺 · 每家仅限查看本代理数据</div>
+</div>
+<script>
+function enter(){
+  const k=document.getElementById('key').value.trim().replace(/[^a-f0-9]/gi,'');
+  if(!k){document.getElementById('err').textContent='请输入密钥';return;}
+  location.href='./'+k+'/';
+}
+document.getElementById('go').onclick=enter;
+document.getElementById('key').addEventListener('keydown',e=>{if(e.key==='Enter')enter();});
+</script>
+</body>
+</html>
