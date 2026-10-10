@@ -22,7 +22,8 @@ const rank=(arr,i)=>arr.map((x,n)=>[n+1].concat(x));
 
 /* ---------- 使用情况埋点 ---------- */
 const EXPORT_LABEL={t1spend:'T1消耗',t1gain:'T1增量',t1loss:'T1掉量',
-  wlost:'钱包流失',wtop:'钱包Top客户',tflow:'转户流失'};
+  wlost:'钱包流失',wtop:'钱包Top客户',tflow:'转户流失',
+  wdecl:'钱包份额下滑',wshrink:'客户缩量'};
 function xcSession(){
   try{
     let s=localStorage.getItem('xc-sid');
@@ -67,6 +68,16 @@ window.xcExport=function(kind){
   }else if(kind==='tflow'){
     t=(a.transfer&&a.transfer.lostFull30d)||[]; headers=['排名','客户名称','转户事件数','年度累计消耗(万元)'];
     rows=t.map(x=>[x.name,x.events,f2(x.costWan)]); name=`${a.short}_转户流失全名单_${date}.csv`;
+  }else if(kind==='wdecl'){
+    t=a.wallet.declFull||[]; headers=['排名','客户名称','7月份额','10月份额','份额下降(pp)','7月日耗(万元)','10月日耗(万元)','客户10月总日耗(万元)'];
+    rows=t.map(x=>[x.name,(x.penJul*100).toFixed(1)+'%',(x.penOct*100).toFixed(1)+'%',
+      (x.dropPp*100).toFixed(1),f2(x.julDayWan),f2(x.octDayWan),f2(x.custOctDayWan)]);
+    name=`${a.short}_钱包份额下滑全名单_${date}.csv`;
+  }else if(kind==='wshrink'){
+    t=a.wallet.shrinkFull||[]; headers=['排名','客户名称','7月份额','10月份额','7月日耗(万元)','10月日耗(万元)','缩量幅度'];
+    rows=t.map(x=>[x.name,(x.penJul*100).toFixed(0)+'%',(x.penOct*100).toFixed(0)+'%',
+      f2(x.julDayWan),f2(x.octDayWan),(x.downPct*100).toFixed(0)+'%']);
+    name=`${a.short}_客户缩量全名单_${date}.csv`;
   }
   rows=rank(rows);
   downloadCSV(name,headers,rows);
@@ -239,6 +250,17 @@ function walletBlock(a){
       <td class="r"><span class="penbar"><i style="width:${Math.min(100,p*100)}%"></i></span>${(p*100).toFixed(1)}%</td>
       <td class="r">${f1(c.pp5DayWan)}</td></tr>`;
   }).join('');
+  const decl=(w.declineTop10||[]).slice(0,6).map(x=>
+    `<tr><td class="nm" title="${esc(x.name)}">${esc(x.name)}</td>
+      <td class="r">${(x.penJul*100).toFixed(0)}%</td>
+      <td class="r" style="color:#dc2626">${(x.penOct*100).toFixed(0)}%</td>
+      <td class="r" style="color:#dc2626">${(x.dropPp*100).toFixed(1)}pp</td>
+      <td class="r">${f1(x.octDayWan)}</td></tr>`).join('');
+  const shrink=(w.shrinkTop10||[]).slice(0,6).map(x=>
+    `<tr><td class="nm" title="${esc(x.name)}">${esc(x.name)}</td>
+      <td class="r">${f1(x.julDayWan)}</td>
+      <td class="r" style="color:#dc2626">${f1(x.octDayWan)}</td>
+      <td class="r" style="color:#dc2626">${(x.downPct*100).toFixed(0)}%</td></tr>`).join();
   return `
   <div class="sec wallet span-12">
     <div class="sec-t"><span class="bar"></span>钱包份额（闭环千川）<span class="hint">投放模式＝闭环千川（product_tag_slice=3）｜份额＝本代理千川 ÷ 客户千川总耗</span></div>
@@ -262,6 +284,28 @@ function walletBlock(a){
         </div>
         <table class="minitable"><thead><tr><th>客户</th><th class="r">千川日耗(万)</th><th class="r">我的份额</th><th class="r">+5pp(万)</th></tr></thead><tbody>${top}</tbody></table>
         <div class="ws" style="margin-top:9px">受剩余份额空间约束的<b>可实现增量约 <span style="color:#4338ca">${f1(w.pp5AchDayWan)} 万/日</span></b></div>
+      </div>
+    </div>
+    <div class="wallet-grid" style="margin-top:14px">
+      <div class="wl-card">
+        <div class="wt">③ 7月在、10月渗透大幅下降<button class="xbtn" onclick="xcExport('wdecl')">导出全名单 (${(w.declFull||[]).length})</button></div>
+        <div class="ws">仍在该代理投放、但份额被竞对蚕食｜口径：7月份额≥20% 且 10月下降≥10pp</div>
+        <div class="wl-big">
+          <div><div class="l">份额下滑客户</div><div class="v">${w.declineCount||0}<small> 个</small></div></div>
+          <div><div class="l">被蚕食钱包</div><div class="v" style="color:#dc2626">${f1(w.declineRiskDayWan)}<small> 万/日</small></div></div>
+        </div>
+        ${(w.declFull||[]).length?`<table class="minitable"><thead><tr><th>客户</th><th class="r">7月份额</th><th class="r">10月份额</th><th class="r">变化</th><th class="r">10月日耗(万)</th></tr></thead><tbody>${decl}</tbody></table>`
+          :`<div class="ws" style="margin-top:10px">✓ 留存客户份额稳定，无显著渗透下滑（份额守住，主要风险见①流失与④客户缩量）</div>`}
+      </div>
+      <div class="wl-card">
+        <div class="wt">④ 客户缩量（份额仍稳）<button class="xbtn" onclick="xcExport('wshrink')">导出全名单 (${(w.shrinkFull||[]).length})</button></div>
+        <div class="ws">客户整体暂停/收缩千川、本代理份额仍≥80%｜属客户经营健康度风险，需唤醒而非抢份额</div>
+        <div class="wl-big">
+          <div><div class="l">缩量客户</div><div class="v">${w.shrinkCount||0}<small> 个</small></div></div>
+          <div><div class="l">较7月蒸发日耗</div><div class="v" style="color:#dc2626">${f1(w.shrinkLossDayWan)}<small> 万/日</small></div></div>
+        </div>
+        ${(w.shrinkFull||[]).length?`<table class="minitable"><thead><tr><th>客户</th><th class="r">7月日耗(万)</th><th class="r">10月日耗(万)</th><th class="r">降幅</th></tr></thead><tbody>${shrink}</tbody></table>`
+          :`<div class="ws" style="margin-top:10px">✓ 无明显客户缩量</div>`}
       </div>
     </div>
   </div>`;
