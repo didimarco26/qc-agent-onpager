@@ -314,7 +314,9 @@ function render(){
     ${goalsBlock(a)}
     ${transferBlock(a)}
     ${walletBlock(a)}
+    ${(DATA.feedbackCfg&&DATA.feedbackCfg.url)?feedbackBlock(a):''}
     ${(DATA.usageCfg&&DATA.usageCfg.token)?usageBlock():''}
+    ${(DATA.feedbackCfg&&DATA.feedbackCfg.token)?fbAdminBlock():''}
 
     <div class="foot">
       <b>数据来源</b>：渠道业绩看板（${DATA.dataDate} 快照）、D11跟踪表、《陈日晖代理Q4品星目标》、转户看板（report 15668836）、钱包份额数据集（dataset 4898252，闭环千川口径）。<br/>
@@ -324,8 +326,10 @@ function render(){
    </div>
   </div>`;
   drawChart(a);
+  initFeedback(a);
   if(DATA.usageCfg&&DATA.usageCfg.token){loadUsage();}
   else{xcBeacon({event:'访问',agent:a.name});}
+  if(DATA.feedbackCfg&&DATA.feedbackCfg.token){loadFbAdmin();}
 }
 
 /* ---------- 总览：代理使用情况看板 ---------- */
@@ -378,6 +382,376 @@ async function loadUsage(){
       </tbody>
     </table>`;
   }catch(e){box.innerHTML='使用数据加载失败：'+esc(e.message);}
+}
+
+/* ====================================================================== */
+/* ---------- 代理商每日跟踪反馈（云端保存，渠道经理总览可见） ---------- */
+/* ====================================================================== */
+const FB_BIG_TYPES=['','品牌大场','达人专场','店播冲榜','新品首发','平台节点大促'];
+const FB_TR_TYPES=['','新开户转入','竞对转入','内部代理转入','转往竞对','客户暂停/流失','内部代理转出'];
+const fbStore={};   // key -> state（本次会话内）
+const fbMeta={};    // key -> {reporter,status,updatedAt,loaded}
+let fbCur=null, fbTimer=null, fbSaving=false, fbPending=false, fbNoNet=new URLSearchParams(location.search).get('nobeacon')==='1';
+
+function fbDefaultState(a){
+  const cands=((a.t1&&a.t1.newCandidates)||[]).slice(0,15);
+  return {
+    reporter:'',
+    newRows:cands.map(c=>({name:c.name,yest:c.costWan,plan:c.costWan,date:'',cat:'',owner:'',checked:true,manual:false})),
+    trRows:[],
+    bigRows:(a.t1&&a.t1.spend||[]).slice(0,10).map(c=>({
+      name:c.name,yest:c.cost,has:'无',date:'',type:'',gmv:'',qc:'',prep:'',support:'',risk:''}))
+  };
+}
+function fbNum(v){const n=parseFloat(v);return isFinite(n)?n:0;}
+function fbSummary(st){
+  let nc=0,nw=0;
+  st.newRows.forEach(r=>{if(r.checked){nc++;nw+=fbNum(r.plan);}});
+  let inW=0,outW=0;
+  st.trRows.forEach(r=>{if(r.dir==='in')inW+=fbNum(r.wan);else outW+=fbNum(r.wan);});
+  let bc=0,bw=0;
+  st.bigRows.forEach(r=>{if(r.has==='有'){bc++;bw+=fbNum(r.qc);}});
+  return {newCount:nc,newWan:+nw.toFixed(2),trInWan:+inW.toFixed(2),trOutWan:+outW.toFixed(2),
+    trNet:+(inW-outW).toFixed(2),bigCount:bc,bigWan:+bw.toFixed(2),allWan:+(nw+inW-outW).toFixed(2)};
+}
+function feedbackBlock(a){
+  const total=(a.t1&&a.t1.newCandidates||[]).length;
+  return `
+  <div class="sec fb span-12" id="fbSec">
+    <div class="sec-t"><span class="bar"></span>✍️ 每日跟踪反馈（请代理侧填写）
+      <span class="hint">填写后云端自动保存草稿，点「提交反馈」渠道经理即可见</span></div>
+    <div class="fb-ctrl">
+      <div class="fld"><label>填报日期</label><input type="date" id="fbDate" value="${DATA.dataDate}"></div>
+      <div class="fld"><label>填报人（对接人姓名）</label><input type="text" id="fbReporter" placeholder="如：张三" style="min-width:160px"></div>
+      <div class="fld"><label>数据日期（看板）</label><input type="text" value="${DATA.dataDate}" disabled style="background:#f8fafc"></div>
+      <div class="fb-status" id="fbStatus"></div>
+    </div>
+
+    <div class="fb-sub">
+      <div class="fb-sub-h">① 最新一天新开客户与预计消耗
+        <span class="fhint">系统已预识别「昨日有耗、前日无耗」客户（共 ${total} 户，下表展示消耗 Top15），请勾选确认为新开并补全预计消耗；老客复投请取消勾选</span></div>
+      <div class="fb-sub-b"><div class="fb-scroll"><table>
+        <thead><tr>
+          <th style="width:40px">新开<br>确认</th><th>客户名称</th><th style="width:90px">昨日耗(万)</th>
+          <th style="width:104px">预计日耗(万)</th><th style="width:130px">预计起量日期</th>
+          <th style="width:110px">行业/品类</th><th style="width:88px">跟进人</th><th style="width:34px"></th>
+        </tr></thead><tbody id="fbNewBody"></tbody>
+      </table></div>
+      <button class="fb-add" id="fbAddNew">＋ 添加新开客户（系统未识别到的）</button>
+      <div class="fb-chips">
+        <span class="fb-chip">确认新开 <b id="fbNewCount">0</b> 户</span>
+        <span class="fb-chip pos">预计日耗合计 <b id="fbNewWan">0</b> 万/天</span>
+      </div></div>
+    </div>
+
+    <div class="fb-sub">
+      <div class="fb-sub-h">② 最新一天转入 / 转出客户
+        <span class="fhint">转入填消耗增量，转出填消耗损失；右侧为近30天转户台账（只读参考）</span></div>
+      <div class="fb-sub-b"><div class="fb-twocol">
+        <div class="fb-scroll"><table>
+          <thead><tr>
+            <th style="width:84px">方向</th><th>客户名称</th><th style="width:116px">类型</th>
+            <th style="width:110px">增量/损失(万)</th><th style="width:120px">来源/去向</th><th>备注</th><th style="width:34px"></th>
+          </tr></thead><tbody id="fbTrBody"></tbody>
+        </table>
+        <button class="fb-add" id="fbAddTr">＋ 添加转户客户</button>
+        <div class="fb-chips">
+          <span class="fb-chip pos">转入 <b id="fbTrIn">0</b> 万/天</span>
+          <span class="fb-chip neg">转出 <b id="fbTrOut">0</b> 万/天</span>
+          <span class="fb-chip">净影响 <b id="fbTrNet">0</b> 万/天</span>
+        </div></div>
+        <div class="fb-ref" id="fbTrRef"></div>
+      </div></div>
+    </div>
+
+    <div class="fb-sub">
+      <div class="fb-sub-h">③ 未来 7 天 Top10 客户大场安排
+        <span class="fhint">名单按昨日千川消耗 Top10 预填；无大场也请选「无」，方便渠道侧盘点大促节奏</span></div>
+      <div class="fb-sub-b"><div class="fb-scroll"><table>
+        <thead><tr>
+          <th>客户（昨日耗）</th><th style="width:78px">有大场?</th><th style="width:128px">大场日期</th>
+          <th style="width:104px">类型</th><th style="width:88px">预计GMV(万)</th><th style="width:96px">预计千川(万)</th>
+          <th style="width:140px">素材/直播准备</th><th style="width:126px">需要渠道支持</th><th style="width:104px">风险提示</th>
+        </tr></thead><tbody id="fbBigBody"></tbody>
+      </table></div>
+      <div class="fb-chips">
+        <span class="fb-chip">有大场 <b id="fbBigCount">0</b> 场</span>
+        <span class="fb-chip pos">预计千川消耗合计 <b id="fbBigWan">0</b> 万</span>
+        <span class="fb-chip" style="margin-left:auto">明日预计新增弹药 <b id="fbAll">0</b> 万/天</span>
+      </div></div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="fb-submit" id="fbSubmit">✅ 提交反馈</button>
+      <button class="fb-ghost" id="fbExport">导出填报 CSV</button>
+      <span style="font-size:11.5px;color:var(--sub-2)">系统每 3 秒自动保存草稿；提交后渠道经理可在总览看到填报状态。明细仅该代理商与渠道经理可见。</span>
+    </div>
+  </div>`;
+}
+
+function fbInit(a){
+  fbCur=a;
+  const date=$('#fbDate').value||DATA.dataDate;
+  const key=a.name+'|'+date;
+  $('#fbReporter').oninput=e=>{fbStore[key].reporter=e.target.value;fbScheduleSave();};
+  $('#fbDate').onchange=()=>fbLoadFor(a,$('#fbDate').value);
+  $('#fbAddNew').onclick=()=>{fbStore[key].newRows.push({name:'',yest:'',plan:0,date:'',cat:'',owner:'',checked:true,manual:true});fbRenderNew();};
+  $('#fbAddTr').onclick=()=>{fbStore[key].trRows.push({dir:'in',name:'',type:FB_TR_TYPES[1],wan:0,src:'',note:''});fbRenderTr();};
+  $('#fbSubmit').onclick=()=>fbSave(key,'已提交',true);
+  $('#fbExport').onclick=()=>fbExportCsv(a,date);
+  fbLoadFor(a,date);
+}
+async function fbLoadFor(a,date){
+  const key=a.name+'|'+date;
+  fbCur=a;
+  if(!fbStore[key]){
+    fbStore[key]=fbDefaultState(a);
+    fbMeta[key]={reporter:'',status:'',updatedAt:0,loaded:false};
+  }
+  const st=fbStore[key], meta=fbMeta[key];
+  $('#fbDate').value=date;
+  $('#fbReporter').value=st.reporter||meta.reporter||'';
+  fbRenderAll();
+  fbSetStatus(meta.loaded?(meta.status==='已提交'?'已提交 ✓ '+fbTime(meta.updatedAt):(meta.updatedAt?'云端草稿 '+fbTime(meta.updatedAt):'未填写')):'正在载入云端草稿…','');
+  if(!meta.loaded && !fbNoNet){
+    try{
+      const cfg=DATA.feedbackCfg||{};
+      if(cfg.url){
+        const r=await fetch(cfg.url+'?key='+encodeURIComponent(xcKey())+'&date='+date);
+        const d=await r.json();
+        if(d&&d.ok&&d.state){
+          const cloud=d.state;
+          ['newRows','trRows','bigRows'].forEach(k=>{if(Array.isArray(cloud[k]))st[k]=cloud[k];});
+          st.reporter=d.reporter||st.reporter||'';
+          meta.reporter=st.reporter;meta.status=d.status;meta.updatedAt=d.updatedAt;
+        }
+        meta.loaded=true;
+        if(fbCur===a && $('#fbDate').value===date){
+          $('#fbReporter').value=st.reporter||'';
+          fbRenderAll();
+          fbSetStatus(d&&d.state?(d.status==='已提交'?'已提交 ✓ '+fbTime(d.updatedAt):'云端草稿 '+fbTime(d.updatedAt)):'今日尚无填报，开始填写后自动保存','');
+        }
+      }else{meta.loaded=true;fbSetStatus('（反馈功能未配置）','err');}
+    }catch(e){meta.loaded=true;fbSetStatus('云端草稿载入失败，可离线填写后重试','err');}
+  }
+}
+function fbTime(ms){return ms?new Date(ms).toLocaleString('zh-CN',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';}
+function fbSetStatus(t,cls){const el=$('#fbStatus');if(!el)return;el.textContent=t;el.className='fb-status '+(cls||'');}
+
+function fbBindRow(tr,arr,rerender,hasKey){
+  tr.querySelectorAll('[data-k]').forEach(el=>{
+    el.addEventListener('input',()=>{
+      const i=+tr.dataset.i,k=el.dataset.k;
+      if(el.type==='checkbox')arr[i][k]=el.checked;
+      else if(el.type==='number')arr[i][k]=el.value===''?'':+el.value;
+      else arr[i][k]=el.value;
+      if(hasKey&&k==='has'){fbRenderBig();}else{fbRecalc();}
+      fbScheduleSave();
+    });
+  });
+  const del=tr.querySelector('[data-del]');
+  if(del)del.onclick=()=>{arr.splice(+tr.dataset.i,1);rerender();fbScheduleSave();};
+}
+function fbEsc(s){return esc(s==null?'':s).replace(/"/g,'&quot;');}
+function fbRenderNew(){
+  const st=fbStore[fbCur.name+'|'+$('#fbDate').value], tb=$('#fbNewBody');
+  tb.innerHTML='';
+  st.newRows.forEach((r,i)=>{
+    const tr=document.createElement('tr');tr.dataset.i=i;
+    tr.innerHTML=`
+      <td style="text-align:center"><input type="checkbox" data-k="checked" ${r.checked?'checked':''}></td>
+      <td class="cname"><input value="${fbEsc(r.name)}" data-k="name" placeholder="客户全称">
+        ${r.manual?'':'<small>系统预识别 · 老客复投请取消勾选</small>'}</td>
+      <td>${r.yest!==''&&r.yest!=null?f1(r.yest):'-'}</td>
+      <td class="num"><input type="number" step="0.1" min="0" value="${r.plan}" data-k="plan"></td>
+      <td><input type="date" value="${r.date||''}" data-k="date"></td>
+      <td><input value="${fbEsc(r.cat)}" data-k="cat" placeholder="如：美妆/食品"></td>
+      <td><input value="${fbEsc(r.owner)}" data-k="owner"></td>
+      <td><button class="del" data-del>✕</button></td>`;
+    fbBindRow(tr,st.newRows,fbRenderNew,false);tb.appendChild(tr);
+  });
+  fbRecalc();
+}
+function fbRenderTr(){
+  const st=fbStore[fbCur.name+'|'+$('#fbDate').value], tb=$('#fbTrBody');
+  tb.innerHTML='';
+  st.trRows.forEach((r,i)=>{
+    const color=r.dir==='in'?'var(--green)':'var(--red)';
+    const tr=document.createElement('tr');tr.dataset.i=i;
+    tr.innerHTML=`
+      <td><select data-k="dir">
+        <option value="in" ${r.dir==='in'?'selected':''}>转入</option>
+        <option value="out" ${r.dir==='out'?'selected':''}>转出</option></select></td>
+      <td><input value="${fbEsc(r.name)}" data-k="name" placeholder="客户全称"></td>
+      <td><select data-k="type">${FB_TR_TYPES.map(t=>`<option ${r.type===t?'selected':''}>${t}</option>`).join('')}</select></td>
+      <td class="num"><input type="number" step="0.1" min="0" value="${r.wan}" data-k="wan" style="color:${color}"></td>
+      <td><input value="${fbEsc(r.src)}" data-k="src" placeholder="来源/去向代理商"></td>
+      <td><input value="${fbEsc(r.note)}" data-k="note" placeholder="原因/挽回动作"></td>
+      <td><button class="del" data-del>✕</button></td>`;
+    fbBindRow(tr,st.trRows,fbRenderTr,false);tb.appendChild(tr);
+  });
+  fbRenderTrRef();fbRecalc();
+}
+function fbRenderTrRef(){
+  const el=$('#fbTrRef');if(!el)return;
+  const t=fbCur.transfer,m30=t&&t['近30天'];
+  if(!m30){el.innerHTML='<h4>近30天转户台账（只读）</h4><div style="color:var(--sub-2)">暂无数据</div>';return;}
+  const top=(t.topLost30d||[]).slice(0,5)
+    .map(x=>`<li>${esc(x.cust)}｜${f1(x.costWan)} 万｜${x.adv} 个广告主</li>`).join('')||'<li>-</li>';
+  el.innerHTML=`<h4>近30天转户台账（只读）</h4>
+    <div class="rr"><span style="color:var(--green)">外部转入</span><b>${m30.inExt.adv} 户 / ${f1(m30.inExt.costWan)} 万</b></div>
+    <div class="rr"><span style="color:var(--red)">外部转出</span><b>${m30.outExt.adv} 户 / ${f1(m30.outExt.costWan)} 万</b></div>
+    <div class="rr"><span>外部净增</span><b style="color:${m30.netExtAdv>=0?'var(--green)':'var(--red)'}">${m30.netExtAdv>=0?'+':''}${m30.netExtAdv}</b></div>
+    <div style="margin-top:6px"><b>转出 Top</b><ul>${top}</ul></div>`;
+}
+function fbRenderBig(){
+  const st=fbStore[fbCur.name+'|'+$('#fbDate').value], tb=$('#fbBigBody');
+  tb.innerHTML='';
+  const base=$('#fbDate').value, maxd=new Date(+new Date(base)+7*864e5).toISOString().slice(0,10);
+  st.bigRows.forEach((r,i)=>{
+    const dim=r.has==='有'?'':'disabled style="background:#f9fafb;color:#9ca3af"';
+    const tr=document.createElement('tr');tr.dataset.i=i;
+    tr.innerHTML=`
+      <td class="cname">${esc(r.name)}<small>昨日耗 ${f1(r.yest)} 万</small></td>
+      <td><select data-k="has">
+        <option ${r.has==='有'?'selected':''}>有</option>
+        <option ${r.has==='筹备中'?'selected':''}>筹备中</option>
+        <option ${r.has==='无'?'selected':''}>无</option></select></td>
+      <td><input type="date" value="${r.date||''}" data-k="date" min="${base}" max="${maxd}" ${dim}></td>
+      <td><select data-k="type" ${dim}>${FB_BIG_TYPES.map(t=>`<option ${r.type===t?'selected':''}>${t}</option>`).join('')}</select></td>
+      <td class="num"><input type="number" step="1" min="0" value="${r.gmv}" data-k="gmv" ${dim}></td>
+      <td class="num"><input type="number" step="0.1" min="0" value="${r.qc}" data-k="qc" ${dim}></td>
+      <td><input value="${fbEsc(r.prep)}" data-k="prep" placeholder="素材条数/直播时长" ${dim}></td>
+      <td><input value="${fbEsc(r.support)}" data-k="support" placeholder="政策/资源/审核" ${dim}></td>
+      <td><input value="${fbEsc(r.risk)}" data-k="risk" placeholder="如库存/ROI" ${dim}></td>`;
+    fbBindRow(tr,st.bigRows,fbRenderBig,true);tb.appendChild(tr);
+  });
+  fbRecalc();
+}
+function fbRenderAll(){fbRenderNew();fbRenderTr();fbRenderBig();fbRecalc();}
+function fbRecalc(){
+  const st=fbStore[fbCur.name+'|'+$('#fbDate').value];if(!st)return;
+  const s=fbSummary(st);
+  const set=(id,v)=>{const el=$(id);if(el)el.textContent=v;};
+  set('#fbNewCount',s.newCount);set('#fbNewWan',f1(s.newWan));
+  set('#fbTrIn',f1(s.trInWan));set('#fbTrOut',f1(s.trOutWan));
+  const net=$('#fbTrNet');if(net){net.textContent=(s.trNet>=0?'+':'')+f1(s.trNet);net.style.color=s.trNet>=0?'var(--green)':'var(--red)';}
+  set('#fbBigCount',s.bigCount);set('#fbBigWan',f1(s.bigWan));
+  set('#fbAll',(s.allWan>=0?'+':'')+f1(s.allWan));
+  return s;
+}
+function fbScheduleSave(){clearTimeout(fbTimer);fbTimer=setTimeout(()=>{const key=fbCur.name+'|'+$('#fbDate').value;fbSave(key,'草稿',false);},3000);}
+async function fbSave(key,status,explicit){
+  if(fbNoNet)return;
+  const cfg=DATA.feedbackCfg;if(!cfg||!cfg.url)return;
+  if(fbSaving){fbPending=true;return;}
+  const st=fbStore[key];if(!st)return;
+  if(explicit&&!String(st.reporter||'').trim()){alert('提交前请填写「填报人」姓名');$('#fbReporter').focus();return;}
+  const date=key.split('|')[1];
+  fbSaving=true;fbSetStatus(explicit?'正在提交…':'正在自动保存草稿…','busy');
+  try{
+    const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key:xcKey(),agent:fbCur.name,date,reporter:st.reporter||'',status,
+        summary:fbSummary(st),state:st})});
+    const d=await r.json();
+    if(d&&d.ok){
+      fbMeta[key]={reporter:st.reporter,status,updatedAt:d.savedAt||Date.now(),loaded:true};
+      fbSetStatus(status==='已提交'?'✅ 已提交，渠道经理可见 '+fbTime(d.savedAt):'☁️ 草稿已自动保存 '+fbTime(d.savedAt),'ok');
+      if(status==='已提交'){xcBeacon({event:'提交反馈',agent:fbCur.name});if(DATA.feedbackCfg.token)loadFbAdmin();}
+    }else{fbSetStatus('保存失败：'+(d&&d.error||r.status),'err');}
+  }catch(e){fbSetStatus('保存失败，网络异常将在下次修改时重试','err');}
+  fbSaving=false;
+  if(fbPending){fbPending=false;fbSave(key,'草稿',false);}
+}
+function fbExportCsv(a,date){
+  const st=fbStore[a.name+'|'+date];
+  const L=[];
+  L.push(['代理商',a.name,'填报日期',date,'填报人',st.reporter||'']);L.push([]);
+  L.push(['① 最新一天新开客户与预计消耗']);
+  L.push(['新开确认','客户名称','昨日消耗(万)','预计日耗(万)','预计起量日期','行业/品类','跟进人']);
+  st.newRows.forEach(r=>L.push([r.checked?'是':'否',r.name,r.yest,r.plan,r.date,r.cat,r.owner]));
+  L.push([]);L.push(['② 最新一天转入/转出客户']);
+  L.push(['方向','客户名称','类型','日耗增量/损失(万)','来源/去向','备注']);
+  st.trRows.forEach(r=>L.push([r.dir==='in'?'转入':'转出',r.name,r.type,r.wan,r.src,r.note]));
+  L.push([]);L.push(['③ 未来7天 Top10 客户大场安排']);
+  L.push(['客户','昨日耗(万)','有大场','大场日期','类型','预计GMV(万)','预计千川消耗(万)','素材/直播准备','需要渠道支持','风险提示']);
+  st.bigRows.forEach(r=>L.push([r.name,r.yest,r.has,r.date,r.type,r.gmv,r.qc,r.prep,r.support,r.risk]));
+  const s=fbSummary(st);
+  L.push([]);L.push(['汇总','确认新开(户)',s.newCount,'新开预计日耗(万/天)',s.newWan,'转户净影响(万/天)',s.trNet,'大场数',s.bigCount,'大场预计消耗(万)',s.bigWan]);
+  downloadCSV(`${a.short}_每日反馈_${date}.csv`,L[0],L.slice(1));
+}
+function initFeedback(a){if(DATA.feedbackCfg&&DATA.feedbackCfg.url&&$('#fbSec'))fbInit(a);}
+
+/* ---------- 总览：代理商每日反馈填报跟踪（仅管理员） ---------- */
+let fbAdminRows=null;
+function fbAdminBlock(){
+  return `
+  <div class="card usage-card" id="fbAdminCard" style="grid-column:1/-1;margin-top:4px">
+    <div class="wt" style="display:flex;align-items:center">
+      <h3 style="margin:0">✍️ 代理商每日反馈填报跟踪</h3>
+      <span style="margin-left:10px;font-size:11px;color:#94a3b8">各代理填报状态实时汇总 · 仅管理员可见</span>
+      <button class="xbtn dark" style="margin-left:auto" onclick="loadFbAdmin()">刷新</button>
+    </div>
+    <div id="fbAdminPanel" style="margin-top:10px;font-size:12px;color:#64748b">正在加载填报数据…</div>
+  </div>`;
+}
+async function loadFbAdmin(){
+  const box=$('#fbAdminPanel');if(!box)return;
+  const cfg=DATA.feedbackCfg;
+  try{
+    const r=await fetch(cfg.url+'?mode=admin',{headers:{'x-admin-token':cfg.token}});
+    const d=await r.json();
+    if(!d||!d.ok){box.innerHTML='填报数据加载失败：'+esc(d&&d.error||r.status);return;}
+    fbAdminRows=d.rows||[];
+    const dates=[...new Set(fbAdminRows.map(x=>x.date))].sort().reverse();
+    const sel=`<select id="fbAdmDate" style="border:1px solid #d1d5db;border-radius:6px;padding:3px 8px;font-size:12px">
+      ${dates.map(dt=>`<option ${dt===DATA.dataDate?'selected':''}>${dt}</option>`).join('')}</select>`;
+    const render=(date)=>{
+      date=date||DATA.dataDate;
+      const byAgent={};
+      fbAdminRows.filter(x=>x.date===date).forEach(x=>{if(!byAgent[x.agent]||x.updatedAt>byAgent[x.agent].updatedAt)byAgent[x.agent]=x;});
+      const trs=DATA.agents.map(a=>{
+        const x=byAgent[a.name];
+        const st=x?`<b style="color:${x.status==='已提交'?'#059669':'#d97706'}">${x.status}</b>`:'<span style="color:#cbd5e1">未填报</span>';
+        const cell=v=>x?f1(v):'-';
+        return `<tr style="border-top:1px solid #eef1f6">
+          <td style="padding:7px 8px;font-weight:700">${esc(a.short)}</td>
+          <td>${st}</td>
+          <td>${x?esc(x.reporter||'-'):'-'}</td>
+          <td>${x?x.newCount:'-'}</td>
+          <td class="pos">${x&&x.newWan?f1(x.newWan):'-'}</td>
+          <td style="color:${x&&x.trNet<0?'#dc2626':'#059669'}">${x?(x.trNet>=0?'+':'')+f1(x.trNet):'-'}</td>
+          <td>${x?x.bigCount:'-'}</td>
+          <td>${x?f1(x.bigWan):'-'}</td>
+          <td style="color:#64748b">${x?fbTime(x.updatedAt):'-'}</td>
+        </tr>`;
+      }).join('');
+      const submitted=Object.values(byAgent).filter(x=>x.status==='已提交').length;
+      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        填报日期 ${sel} ｜ <b>${submitted}/${DATA.agents.length}</b> 家已提交
+        <button class="xbtn dark" id="fbAdmDl" style="margin-left:auto">导出当日汇总 CSV</button></div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="color:#64748b;text-align:left">
+            <th style="padding:6px 8px">代理商</th><th>状态</th><th>填报人</th>
+            <th>新开(户)</th><th>新开预计日耗(万)</th><th>转户净影响(万)</th>
+            <th>大场(场)</th><th>大场预计消耗(万)</th><th>更新时间</th>
+          </tr></thead><tbody>${trs}</tbody></table>`;
+    };
+    if(!fbAdminRows.length){box.innerHTML='暂无填报记录。';return;}
+    box.innerHTML=render();
+    $('#fbAdmDate').onchange=e=>{box.innerHTML=render(e.target.value);bindDl();};
+    bindDl();
+    function bindDl(){
+      const b=$('#fbAdmDl');if(!b)return;
+      b.onclick=()=>{
+        const date=$('#fbAdmDate').value;
+        const rows=fbAdminRows.filter(x=>x.date===date);
+        downloadCSV(`代理每日反馈汇总_${date}.csv`,
+          ['代理商','状态','填报人','新开客户数','新开预计日耗(万)','转入合计(万)','转出合计(万)','转户净影响(万)','大场数','大场预计消耗(万)','明日新增弹药(万)','更新时间'],
+          rows.map(x=>[x.agent,x.status,x.reporter,x.newCount,x.newWan,x.trInWan,x.trOutWan,x.trNet,x.bigCount,x.bigWan,x.allWan,fbTime(x.updatedAt)]));
+      };
+    }
+  }catch(e){box.innerHTML='填报数据加载失败：'+esc(e.message);}
 }
 
 function drawChart(a){

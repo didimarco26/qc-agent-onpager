@@ -181,12 +181,57 @@ body{
 .xbtn.dark{border-color:#d8c49a;background:#fffdf2;color:#926a1c}
 .xbtn.dark:hover{background:#d97706;color:#fff;border-color:#d97706}
 
+/* ---------- Feedback（代理商每日填报） ---------- */
+.fb{background:linear-gradient(180deg,#fffaf2,#fff);border:1px solid #f0dfc2}
+.fb .sec-t .bar{background:var(--amber)}
+.fb-ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:14px}
+.fb-ctrl .fld{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--sub);font-weight:600}
+.fb-ctrl input{border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font-size:13px;background:#fff;min-width:130px}
+.fb-ctrl input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.10)}
+.fb-status{font-size:12.5px;color:var(--sub);margin-left:auto;display:flex;align-items:center;gap:10px;font-weight:600}
+.fb-status.ok{color:var(--green)}.fb-status.busy{color:var(--amber)}.fb-status.err{color:var(--red)}
+.fb-sub{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;margin-bottom:14px;background:#fff}
+.fb-sub-h{padding:10px 14px;font-size:13.5px;font-weight:800;background:#fafbfe;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fb-sub-h .fhint{font-size:11.5px;color:var(--sub);font-weight:500}
+.fb-sub-b{padding:8px 10px}
+.fb-twocol{display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start}
+.fb-scroll{overflow-x:auto}
+.fb table{width:100%;border-collapse:collapse;font-size:12.5px}
+.fb th{text-align:left;color:var(--sub);font-weight:600;font-size:11.5px;padding:7px 7px;border-bottom:1px solid var(--line);white-space:nowrap}
+.fb td{padding:5px 7px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.fb tr:last-child td{border-bottom:none}
+.fb td input,.fb td select{width:100%;border:1px solid #e5e7eb;border-radius:6px;padding:5px 7px;font-size:12.5px;background:#fff}
+.fb td input:focus,.fb td select:focus{outline:none;border-color:var(--primary)}
+.fb td.num input{text-align:right}
+.fb .cname{font-weight:600;min-width:170px}
+.fb .cname small{display:block;font-weight:400;color:var(--sub-2);font-size:10.5px}
+.fb .del{border:0;background:none;color:#cbd5e1;cursor:pointer;font-size:14px;padding:2px 4px}
+.fb .del:hover{color:var(--red)}
+.fb-add{margin-top:8px;border:1px dashed #c3ccd9;background:#fcfcfd;color:#475569;border-radius:8px;
+  padding:8px;width:100%;cursor:pointer;font-size:12.5px;font-weight:700}
+.fb-add:hover{border-color:var(--primary);color:var(--primary);background:#f5f8ff}
+.fb-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.fb-chip{background:#f6f8fc;border:1px solid #e4e9f3;border-radius:8px;padding:6px 12px;font-size:12px;color:var(--sub)}
+.fb-chip b{font-size:14px;color:var(--ink)}
+.fb-chip.pos b{color:var(--green)}.fb-chip.neg b{color:var(--red)}
+.fb-ref{background:#fafbfe;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12px}
+.fb-ref h4{font-size:12.5px;margin-bottom:8px}
+.fb-ref .rr{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #e5e7eb;font-size:12px}
+.fb-ref .rr:last-of-type{border-bottom:none}
+.fb-ref ul{margin:4px 0 8px 16px;color:var(--sub);font-size:11.5px;line-height:1.8}
+.fb-submit{background:var(--primary);color:#fff;border:0;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer}
+.fb-submit:hover{background:var(--primary-d)}
+.fb-ghost{background:#f1f5f9;color:#334155;border:0;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer}
+.fb-ghost:hover{background:#e2e8f0}
+
 @media print{
   body{background:#fff}
   .tabs,.tools{display:none!important}
   .page{padding:0}
   .sec,.hdr{box-shadow:none;break-inside:avoid}
   .app{max-width:100%;padding:0}
+  #fbSec,#fbAdminCard{display:none!important}
 }
 </style>
 </head>
