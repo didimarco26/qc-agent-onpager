@@ -249,7 +249,7 @@ function walletBlock(a){
     `<tr><td class="nm" title="${esc(x.name)}">${esc(x.name)}</td>
       <td class="r">${f1(x.julDayWan)}</td>
       <td class="r" style="color:#dc2626">${f1(x.octDayWan)}</td>
-      <td class="r" style="color:#dc2626">${(x.downPct*100).toFixed(0)}%</td></tr>`).join();
+      <td class="r" style="color:#dc2626">${(x.downPct*100).toFixed(0)}%</td></tr>`).join('');
   return `
   <div class="sec wallet span-12">
     <div class="sec-t"><span class="bar"></span>钱包份额（闭环千川）<span class="hint">投放模式＝闭环千川（product_tag_slice=3）｜份额＝本代理千川 ÷ 客户千川总耗</span></div>
