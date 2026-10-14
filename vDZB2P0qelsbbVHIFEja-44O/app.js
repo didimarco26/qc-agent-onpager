@@ -514,11 +514,17 @@ async function fbLoadFor(a,date){
   fbRenderAll();
   fbSetStatus(meta.loaded?(meta.status==='已提交'?'已提交 ✓ '+fbTime(meta.updatedAt):(meta.updatedAt?'云端草稿 '+fbTime(meta.updatedAt):'未填写')):'正在载入云端草稿…','');
   if(!meta.loaded && !fbNoNet){
-    try{
-      const cfg=DATA.feedbackCfg||{};
-      if(cfg.url){
-        const r=await fetch(cfg.url+'?key='+encodeURIComponent(xcKey())+'&date='+date);
-        const d=await r.json();
+    const cfg=DATA.feedbackCfg||{};
+    if(cfg.url){
+      let d=null,lastErr='';
+      for(let attempt=0;attempt<3&&!d;attempt++){
+        try{
+          const r=await fetch(cfg.url+'?key='+encodeURIComponent(xcKey())+'&date='+date);
+          d=await r.json();
+        }catch(e){lastErr=e.message;await new Promise(res=>setTimeout(res,800*(attempt+1)));}
+      }
+      try{
+        if(!d){meta.loaded=true;fbSetStatus('云端草稿载入失败，可离线填写后刷新重试','err');return;}
         if(d&&d.ok&&d.state){
           const cloud=d.state;
           ['newRows','trRows','bigRows'].forEach(k=>{if(Array.isArray(cloud[k]))st[k]=cloud[k];});
@@ -531,8 +537,8 @@ async function fbLoadFor(a,date){
           fbRenderAll();
           fbSetStatus(d&&d.state?(d.status==='已提交'?'已提交 ✓ '+fbTime(d.updatedAt):'云端草稿 '+fbTime(d.updatedAt)):'今日尚无填报，开始填写后自动保存','');
         }
-      }else{meta.loaded=true;fbSetStatus('（反馈功能未配置）','err');}
-    }catch(e){meta.loaded=true;fbSetStatus('云端草稿载入失败，可离线填写后重试','err');}
+      }catch(e){meta.loaded=true;fbSetStatus('云端草稿载入失败：'+e.message,'err');}
+    }else{meta.loaded=true;}
   }
 }
 function fbTime(ms){return ms?new Date(ms).toLocaleString('zh-CN',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';}
@@ -698,10 +704,16 @@ function fbAdminBlock(){
 async function loadFbAdmin(){
   const box=$('#fbAdminPanel');if(!box)return;
   const cfg=DATA.feedbackCfg;
+  let d=null;
+  for(let attempt=0;attempt<3&&!d;attempt++){
+    try{
+      const r=await fetch(cfg.url+'?mode=admin',{headers:{'x-admin-token':cfg.token}});
+      d=await r.json();
+    }catch(e){await new Promise(res=>setTimeout(res,800*(attempt+1)));}
+  }
   try{
-    const r=await fetch(cfg.url+'?mode=admin',{headers:{'x-admin-token':cfg.token}});
-    const d=await r.json();
-    if(!d||!d.ok){box.innerHTML='填报数据加载失败：'+esc(d&&d.error||r.status);return;}
+    if(!d){box.innerHTML='填报数据加载失败，请点「刷新」重试';return;}
+    if(!d||!d.ok){box.innerHTML='填报数据加载失败：'+esc(d&&d.error||'未知错误');return;}
     fbAdminRows=d.rows||[];
     const dates=[...new Set(fbAdminRows.map(x=>x.date))].sort().reverse();
     const sel=`<select id="fbAdmDate" style="border:1px solid #d1d5db;border-radius:6px;padding:3px 8px;font-size:12px">
