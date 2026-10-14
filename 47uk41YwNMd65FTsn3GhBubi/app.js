@@ -116,7 +116,7 @@ function d11Block(a){
   const inf=a.qcInflate, pos=inf>=0;
   const badge=`<span class="badge ${pos?'pos':'neg'}">${pos?'膨胀':'负膨胀'} ${pos?'▲':'▼'} ${pct(Math.abs(inf))}</span>`;
   const gap=a.d11GapWan;
-  const note=`千川昨日 <b>${f1(a.qcYesterdayWan)} 万</b>，较参考期日耗 ${f1(a.refQcWan)} 万 ${pos?'膨胀':'负膨胀'} ${pct(Math.abs(inf))}（${pos?'+':''}${f1(a.qcYesterdayWan-a.refQcWan)} 万）；`
+  const note=`千川昨日 <b>${f1(a.qcYesterdayWan)} 万</b>，较参考期日耗（7.14–7.20）${f1(a.refQcWan)} 万 ${pos?'膨胀':'负膨胀'} ${pct(Math.abs(inf))}（${pos?'+':''}${f1(a.qcYesterdayWan-a.refQcWan)} 万）；`
     +`距双十一目标 <b>${f0(a.d11GoalWan)} 万</b> 还差 <b style="color:var(--red)">${f1(gap)} 万</b>，当前达成 ${pct(a.d11GoalAch)}。`;
   return `
   <div class="sec d11 span-12">
@@ -128,7 +128,7 @@ function d11Block(a){
         <div class="s">${ratioTag(a.yesterday.qcRatio)}</div>
       </div>
       <div class="d11-card">
-        <div class="l">参考期千川日耗</div>
+        <div class="l">参考期千川日耗（7.14–7.20）</div>
         <div class="v">${f1(a.refQcWan)}<small> 万</small></div>
         ${badge}
       </div>
@@ -149,7 +149,7 @@ function chartBlock(a,y){
     <div class="sec-t"><span class="bar"></span>千川日耗明细（${a.dates[0]}–${a.dates[a.dates.length-1]}）<span class="hint">单位：万元</span></div>
     <div class="chart-sum">
       <span>本期合计 <b>${f1(wan(a.qcTotal7))} 万</b></span>
-      <span>官方参考期日耗 <b>${f1(a.refQcWan)} 万</b></span>
+      <span>官方参考期日耗（7.14–7.20）<b>${f1(a.refQcWan)} 万</b></span>
       <span>${ratioTag(y.qcRatio)}</span>
     </div>
     <div class="chart-box" id="qcChart"></div>
@@ -318,7 +318,7 @@ function render(){
 
     <div class="foot">
       <b>数据来源</b>：渠道业绩看板（${DATA.dataDate} 快照）、D11跟踪表、《陈日晖代理Q4品星目标》、转户看板（report 15668836）、钱包份额数据集（dataset 4898252，闭环千川口径）。<br/>
-      <b>口径</b>：金额单位万元；参考期日耗与双十一目标取自 D11 跟踪表，膨胀率 = 最近一天 ÷ 参考期日耗 − 1。<b>转户</b>按（广告主+转出+转入+成功时间+类型）去重，外部＝与8家之外；转户窗口为近30天，所列“消耗”为该广告主2026年度(01.01–${DATA.dataDate.slice(5).replace('-','.')})累计消耗。<br/>
+      <b>口径</b>：金额单位万元；参考期＝2026.07.14–07.20 千川日均（扬悦取官方业绩看板闭环千川口径），双十一目标为老板下发的大促日均目标，膨胀率 = 最近一天 ÷ 参考期日耗 − 1。<b>转户</b>按（广告主+转出+转入+成功时间+类型）去重，外部＝与8家之外；转户窗口为近30天，所列“消耗”为该广告主2026年度(01.01–${DATA.dataDate.slice(5).replace('-','.')})累计消耗。<br/>
       <b>钱包份额</b>：严格筛选投放模式＝闭环千川；份额＝本代理千川 ÷ 客户跨代理千川总耗；流失＝7月有、10月在该代理无消耗。<b>T-1 客户榜</b>：客户级闭环千川消耗及环比。生成时间 ${DATA.dataDate}。
     </div>
    </div>
@@ -403,7 +403,7 @@ function drawChart(a){
         {offset:0,color:'rgba(29,78,216,.22)'},{offset:1,color:'rgba(29,78,216,.01)'}])},
       markLine:{symbol:'none',data:[{yAxis:ref,name:'参考期日耗',
         lineStyle:{color:'#d97706',type:'dashed',width:1.5},
-        label:{formatter:'参考期日耗 '+ref,color:'#d97706',position:'insideEndTop'}}]}
+        label:{formatter:'参考期 7.14-7.20  '+ref,color:'#d97706',position:'insideEndTop'}}]}
     }]
   });
 }
