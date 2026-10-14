@@ -215,7 +215,7 @@ function transferBlock(a){
   if(!t) return '<div class="sec span-6"></div>';
   const m30=t['近30天'], ytd=t['YTD'];
   const net=m30.netExtAdv;
-  const netColor=net>0?'#059669':(net<0?'#b45309':'#94a3b8');
+  const netColor=net>0?'#059669':(net<0?'#dc2626':'#94a3b8');
   const ytdColor=ytd.netExtAdv>0?'#059669':'#dc2626';
   const lost=(t.topLost30d||[]).slice(0,5).map(x=>
     `<tr><td class="nm" title="${esc(x.cust)}">${esc(x.cust)}</td><td class="r">${x.adv}</td><td class="r">${f1(x.costWan)}</td></tr>`).join('');
@@ -223,7 +223,7 @@ function transferBlock(a){
   <div class="sec span-6">
     <div class="sec-t"><span class="bar" style="background:#d97706"></span>转户情况（千川）<span class="hint">转户窗口 近30天｜消耗为年度累计</span><button class="xbtn dark" onclick="xcExport('tflow')">导出全名单 (${(t.lostFull30d||[]).length})</button></div>
     <div class="tf-grid">
-      <div class="tf-mini" style="border:1px solid #f0d6a8;background:#fffdf7"><div class="l">外部转出</div><div class="v" style="color:#b45309">${m30.outExt.adv}</div></div>
+      <div class="tf-mini" style="border:1px solid #f3c9c2;background:#fff8f6"><div class="l">外部转出</div><div class="v" style="color:#dc2626">${m30.outExt.adv}</div></div>
       <div class="tf-mini" style="border:1px solid #bbf0d2;background:#f7fffb"><div class="l">外部转入</div><div class="v" style="color:#059669">${m30.inExt.adv}</div></div>
       <div class="tf-mini" style="border-style:solid;background:#fff"><div class="l">外部净增</div><div class="v" style="color:${netColor}">${net>0?'+':''}${net}</div></div>
       <div class="tf-mini" style="border-style:solid;background:#fff"><div class="l">转出客户年度累计消耗</div><div class="v">${f1(m30.outExt.costWan)}<small> 万</small></div></div>
