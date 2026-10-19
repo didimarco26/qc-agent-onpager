@@ -492,13 +492,14 @@ function feedbackBlock(a){
 function fbInit(a){
   fbCur=a;
   const date=$('#fbDate').value||DATA.dataDate;
-  const key=a.name+'|'+date;
-  $('#fbReporter').oninput=e=>{fbStore[key].reporter=e.target.value;fbScheduleSave();};
+  $('#fbDate').value=date;
+  const keyOf=()=>a.name+'|'+$('#fbDate').value;   // 始终按当前填报日期取暂存区，避免切换日期后写错 key
+  $('#fbReporter').oninput=e=>{fbStore[keyOf()].reporter=e.target.value;fbScheduleSave();};
   $('#fbDate').onchange=()=>fbLoadFor(a,$('#fbDate').value);
-  $('#fbAddNew').onclick=()=>{fbStore[key].newRows.push({name:'',yest:'',plan:0,date:'',cat:'',owner:'',checked:true,manual:true});fbRenderNew();};
-  $('#fbAddTr').onclick=()=>{fbStore[key].trRows.push({dir:'in',name:'',type:FB_TR_TYPES[1],wan:0,src:'',note:''});fbRenderTr();};
-  $('#fbSubmit').onclick=()=>fbSave(key,'已提交',true);
-  $('#fbExport').onclick=()=>fbExportCsv(a,date);
+  $('#fbAddNew').onclick=()=>{fbStore[keyOf()].newRows.push({name:'',yest:'',plan:0,date:'',cat:'',owner:'',checked:true,manual:true});fbRenderNew();fbScheduleSave();};
+  $('#fbAddTr').onclick=()=>{fbStore[keyOf()].trRows.push({dir:'in',name:'',type:FB_TR_TYPES[1],wan:0,src:'',note:''});fbRenderTr();fbScheduleSave();};
+  $('#fbSubmit').onclick=()=>fbSave(keyOf(),'已提交',true);
+  $('#fbExport').onclick=()=>fbExportCsv(a,$('#fbDate').value);
   fbLoadFor(a,date);
 }
 async function fbLoadFor(a,date){
