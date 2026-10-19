@@ -502,12 +502,35 @@ function fbInit(a){
   $('#fbExport').onclick=()=>fbExportCsv(a,$('#fbDate').value);
   fbLoadFor(a,date);
 }
+function fbLsKey(key){return 'xc-fb-v1|'+key;}
+function fbPersistLocal(key){
+  try{
+    const st=fbStore[key];
+    localStorage.setItem(fbLsKey(key),JSON.stringify({reporter:st.reporter,state:st,_t:Date.now()}));
+  }catch(e){}
+}
+function fbReadLocal(key){
+  try{
+    const raw=localStorage.getItem(fbLsKey(key));
+    if(!raw)return null;
+    const o=JSON.parse(raw);
+    if(o&&o.state)return o;
+  }catch(e){}
+  return null;
+}
 async function fbLoadFor(a,date){
   const key=a.name+'|'+date;
   fbCur=a;
   if(!fbStore[key]){
     fbStore[key]=fbDefaultState(a);
     fbMeta[key]={reporter:'',status:'',updatedAt:0,loaded:false};
+    // 本机草稿兜底：云端没回来前先用本地内容，防止刷新/提交失败丢内容
+    const loc=fbReadLocal(key);
+    if(loc){
+      if(loc.reporter)fbStore[key].reporter=loc.reporter;
+      ['newRows','trRows','bigRows'].forEach(k=>{if(Array.isArray(loc.state[k]))fbStore[key][k]=loc.state[k];});
+      fbMeta[key].reporter=loc.reporter||'';
+    }
   }
   const st=fbStore[key], meta=fbMeta[key];
   $('#fbDate').value=date;
@@ -531,6 +554,7 @@ async function fbLoadFor(a,date){
           ['newRows','trRows','bigRows'].forEach(k=>{if(Array.isArray(cloud[k]))st[k]=cloud[k];});
           st.reporter=d.reporter||st.reporter||'';
           meta.reporter=st.reporter;meta.status=d.status;meta.updatedAt=d.updatedAt;
+          fbPersistLocal(key);   // 云端为准，回写本机备份
         }
         meta.loaded=true;
         if(fbCur===a && $('#fbDate').value===date){
@@ -647,26 +671,45 @@ function fbRecalc(){
   set('#fbAll',(s.allWan>=0?'+':'')+f1(s.allWan));
   return s;
 }
-function fbScheduleSave(){clearTimeout(fbTimer);fbTimer=setTimeout(()=>{const key=fbCur.name+'|'+$('#fbDate').value;fbSave(key,'草稿',false);},3000);}
+function fbScheduleSave(){clearTimeout(fbTimer);const key=fbCur.name+'|'+$('#fbDate').value;fbPersistLocal(key);fbTimer=setTimeout(()=>{fbSave(key,'草稿',false);},3000);}
+async function fbPostOnce(cfg,key,date,st,status){
+  const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({key:xcKey(),agent:fbCur.name,date,reporter:st.reporter||'',status,
+      summary:fbSummary(st),state:st})});
+  let d=null;
+  try{d=await r.json();}catch(e){d=null;}
+  if(d&&d.ok)return d;
+  const msg=(d&&d.error)||('HTTP '+r.status);
+  const retryable=!d||/reached_max_replica_limit|timeout|5\d\d|429|Failed to fetch|NetworkError/i.test(String(msg))||r.status>=500;
+  const err=new Error(msg);err.retryable=retryable;throw err;
+}
 async function fbSave(key,status,explicit){
-  if(fbNoNet)return;
-  const cfg=DATA.feedbackCfg;if(!cfg||!cfg.url)return;
+  if(fbNoNet){fbPersistLocal(key);fbSetStatus('离线模式：内容已保存在本机，联网后请点「提交反馈」','');return;}
+  const cfg=DATA.feedbackCfg;if(!cfg||!cfg.url){fbPersistLocal(key);return;}
   if(fbSaving){fbPending=true;return;}
   const st=fbStore[key];if(!st)return;
   if(explicit&&!String(st.reporter||'').trim()){alert('提交前请填写「填报人」姓名');$('#fbReporter').focus();return;}
   const date=key.split('|')[1];
-  fbSaving=true;fbSetStatus(explicit?'正在提交…':'正在自动保存草稿…','busy');
-  try{
-    const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({key:xcKey(),agent:fbCur.name,date,reporter:st.reporter||'',status,
-        summary:fbSummary(st),state:st})});
-    const d=await r.json();
-    if(d&&d.ok){
-      fbMeta[key]={reporter:st.reporter,status,updatedAt:d.savedAt||Date.now(),loaded:true};
-      fbSetStatus(status==='已提交'?'✅ 已提交，渠道经理可见 '+fbTime(d.savedAt):'☁️ 草稿已自动保存 '+fbTime(d.savedAt),'ok');
-      if(status==='已提交'){xcBeacon({event:'提交反馈',agent:fbCur.name});if(DATA.feedbackCfg.token)loadFbAdmin();}
-    }else{fbSetStatus('保存失败：'+(d&&d.error||r.status),'err');}
-  }catch(e){fbSetStatus('保存失败，网络异常将在下次修改时重试','err');}
+  fbPersistLocal(key);   // 先落本机，任何网络失败都不丢内容
+  fbSaving=true;
+  let d=null,lastErr='';
+  for(let attempt=1;attempt<=3&&!d;attempt++){
+    fbSetStatus(explicit?`正在提交…（第${attempt}次）`:`正在自动保存草稿…（第${attempt}次）`,'busy');
+    try{d=await fbPostOnce(cfg,key,date,st,status);}
+    catch(e){
+      lastErr=e.message;
+      if(attempt<3&&e.retryable){await new Promise(res=>setTimeout(res,1200*attempt));continue;}
+      break;
+    }
+  }
+  if(d){
+    fbMeta[key]={reporter:st.reporter,status,updatedAt:d.savedAt||Date.now(),loaded:true};
+    fbPersistLocal(key);
+    fbSetStatus(status==='已提交'?'✅ 已提交，渠道经理可见 '+fbTime(d.savedAt):'☁️ 草稿已自动保存 '+fbTime(d.savedAt),'ok');
+    if(status==='已提交'){xcBeacon({event:'提交反馈',agent:fbCur.name});if(DATA.feedbackCfg.token)loadFbAdmin();}
+  }else{
+    fbSetStatus((explicit?'提交失败':'自动保存失败')+'：'+lastErr+'。内容已保存在本机，请稍后再点「提交反馈」','err');
+  }
   fbSaving=false;
   if(fbPending){fbPending=false;fbSave(key,'草稿',false);}
 }
