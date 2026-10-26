@@ -116,17 +116,28 @@ function d11Block(a){
   const inf=a.qcInflate, pos=inf>=0;
   const badge=`<span class="badge ${pos?'pos':'neg'}">${pos?'膨胀':'负膨胀'} ${pos?'▲':'▼'} ${pct(Math.abs(inf))}</span>`;
   const gap=a.d11GapWan;
+  const endLabel=DATA.dataDate.slice(5);
+  const pBadge=(a.promoAvgQcWan==null)?'':(()=>{const pi=a.promoInflate,pp=a.promoGoalAch;const p=pi>=0;
+    return `<span class="badge ${p?'pos':'neg'}" style="margin-top:6px">${p?'膨胀':'负膨胀'} ${p?'▲':'▼'} ${pct(Math.abs(pi))}</span>
+      <div class="s" style="margin-top:4px">目标达成 <b style="color:${pp>=1?'#059669':'#b91c1c'}">${pct(pp)}</b></div>`;})();
+  const promoCard=(a.promoAvgQcWan==null)?'':`
+      <div class="d11-card" style="border-color:#cfe0ff;background:linear-gradient(180deg,#f3f7ff,#fff)">
+        <div class="l">大促期千川日均（10.15–${endLabel}，${a.promoDays}天）</div>
+        <div class="v" style="color:#1d4ed8">${f1(a.promoAvgQcWan)}<small> 万</small></div>
+        ${pBadge}
+      </div>`;
   const note=`千川昨日 <b>${f1(a.qcYesterdayWan)} 万</b>，较参考期日耗（7.14–7.20）${f1(a.refQcWan)} 万 ${pos?'膨胀':'负膨胀'} ${pct(Math.abs(inf))}（${pos?'+':''}${f1(a.qcYesterdayWan-a.refQcWan)} 万）；`
     +`距双十一目标 <b>${f0(a.d11GoalWan)} 万</b> 还差 <b style="color:var(--red)">${f1(gap)} 万</b>，当前达成 ${pct(a.d11GoalAch)}。`;
+  const promoNote=(a.promoAvgQcWan==null)?'':`大促期（10.15–${endLabel}，${a.promoDays} 天）千川日均 <b>${f1(a.promoAvgQcWan)} 万</b>，较参考期 ${a.promoInflate>=0?'膨胀':'负膨胀'} ${pct(Math.abs(a.promoInflate))}，目标日均达成 ${pct(a.promoGoalAch)}。`;
   return `
   <div class="sec d11 span-12">
     <div class="sec-t"><span class="bar"></span>双十一千川冲刺 · 参考期膨胀与目标 Gap<span class="hint">核心看千川</span></div>
     <div class="d11-grid">
       <div class="d11-card">
-        <div class="l">最近一天千川消耗（${DATA.dataDate.slice(5)}）</div>
+        <div class="l">最近一天千川消耗（${endLabel}）</div>
         <div class="v">${f1(a.qcYesterdayWan)}<small> 万</small></div>
         <div class="s">${ratioTag(a.yesterday.qcRatio)}</div>
-      </div>
+      </div>${promoCard}
       <div class="d11-card">
         <div class="l">参考期千川日耗（7.14–7.20）</div>
         <div class="v">${f1(a.refQcWan)}<small> 万</small></div>
@@ -138,7 +149,7 @@ function d11Block(a){
         <div class="s" style="font-weight:700;color:var(--red)">Gap ${f1(gap)} 万 · 达成 ${pct(a.d11GoalAch)}</div>
       </div>
     </div>
-    <div class="d11-note">${note}</div>
+    <div class="d11-note">${promoNote}${note}</div>
   </div>`;
 }
 
